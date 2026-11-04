@@ -537,17 +537,27 @@
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Enter a valid email address.'; err.hidden = false; return; }
     err.hidden = true;
     var p = laneProps();
-    var summary = p.origin_city + ', ' + p.origin_state + ' ' + p.origin_zip + ' → ' + p.dest_city + ', ' + p.dest_state + ' ' + p.dest_zip +
-      ' | ' + vehicleLabel(p.vehicle_type) + ' x' + p.quantity + (p.inoperable ? ' inop' : '') + (p.enclosed ? ' enclosed' : '') +
-      ' | estimate ' + money(state.carrier) +
-      (p.rep ? ' | rep ' + p.rep : '') + ' | ' + shareUrl();
+    // Separate HubSpot properties so the follow-up email can show each piece (and use the link in a button).
+    var lane = p.origin_city + ', ' + p.origin_state + ' ' + p.origin_zip + ' → ' + p.dest_city + ', ' + p.dest_state + ' ' + p.dest_zip;
+    var vehicle = vehicleLabel(p.vehicle_type) + ' × ' + p.quantity + ' · ' + (p.inoperable ? 'Inoperable' : 'Operable') +
+      ' · ' + (p.enclosed ? 'Enclosed' : 'Open') + ' trailer';
+    var price = money(state.carrier) + (p.quantity > 1 ? ' for ' + p.quantity + ' vehicles' : '');
+    var summary = lane + ' | ' + vehicle + ' | ' + price + (p.rep ? ' | rep ' + p.rep : '') + ' | ' + shareUrl();
 
     var send;
     if (cfg.hubspotPortalId && cfg.hubspotFormGuid) {
       send = fetch('https://api.hsforms.com/submissions/v3/integration/submit/' + cfg.hubspotPortalId + '/' + cfg.hubspotFormGuid, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fields: [{ name: 'email', value: email }, { name: cfg.hubspotSummaryField, value: summary }],
+          fields: [
+            { name: 'email', value: email },
+            { name: cfg.hubspotSummaryField, value: summary },
+            { name: 'market_estimate_lane', value: lane },
+            { name: 'market_estimate_vehicle', value: vehicle },
+            { name: 'market_estimate_price', value: price },
+            { name: 'market_estimate_link', value: shareUrl() },
+            { name: 'market_estimate_rep', value: p.rep || '' },
+          ],
           context: { hutk: hubspotCookie(), pageUri: window.location.href, pageName: document.title },
         }),
       }).then(function (r) { if (!r.ok) throw new Error('send failed'); });
