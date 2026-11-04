@@ -57,6 +57,20 @@
         window.parent.postMessage({ type: 'ahx-estimator-height', height: h }, '*');
       }
     }).observe(document.body);
+
+    // Hand mouse-wheel scrolling to the host page. Some hosts (e.g. Webflow's canvas) don't scroll when the
+    // wheel is over a cross-origin iframe. Only switches on after the host snippet says it's listening, so a
+    // host without the snippet keeps the browser's normal scrolling.
+    var hostScrolls = false;
+    window.addEventListener('message', function (e) {
+      if (e.source === window.parent && e.data && e.data.type === 'ahx-host-ready') hostScrolls = true;
+    });
+    window.addEventListener('wheel', function (e) {
+      if (!hostScrolls || e.ctrlKey) return; // ctrl+wheel is pinch-zoom
+      var unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
+      window.parent.postMessage({ type: 'ahx-estimator-wheel', dx: e.deltaX * unit, dy: e.deltaY * unit }, '*');
+      e.preventDefault();
+    }, { passive: false });
   }
 
   // ---------- helpers ----------
