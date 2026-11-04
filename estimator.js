@@ -523,7 +523,7 @@
       '<button class="ahxe-btn" type="submit">Email me this</button></form>' +
       '<div class="ahxe-form-error" data-lead-error hidden></div>' +
       (cfg.directUrl ? '<div class="ahxe-fine">Shipping a personal vehicle? <a class="ahxe-link" href="' + esc(cfg.directUrl) + '" target="_blank" rel="noopener">Visit AHX Direct</a>.</div>' : '') +
-      '<div class="ahxe-fine">Estimate based on current market data. Valid for 24 hours; final rates depend on carrier availability.</div>';
+      '<div class="ahxe-fine">An estimate based on current market data, not a quote. Final rates depend on carrier availability.</div>';
     $('[data-lead-form]').addEventListener('submit', submitLead);
   }
   function hubspotCookie() {
