@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Iframe-only page. The indexable content lives on the Webflow page that embeds it. -->
+  <meta name="robots" content="noindex, nofollow">
+  <title>AHX Market Estimator</title>
+  <link rel="stylesheet" href="estimator.css">
+  <style>
+    html, body { margin: 0; background: #000; }
+    body { padding: 16px; }
+    @media (max-width: 520px) { body { padding: 12px 0; } }
+  </style>
+</head>
+<body>
+  <div id="ahx-estimator"></div>
+  <script>
+    window.AHX_ESTIMATOR_CONFIG = {
+      // Port 3004 is the static demo preview (demo pricing). Everywhere else calls the public quotes API
+      // directly; the API only accepts calls from approved sites.
+      apiUrl: location.port === '3004' ? null
+        : 'https://quoteengine.thankfulwave-581a00d5.eastus.azurecontainerapps.io/v1/public/quotes',
+    };
+  </script>
+  <script src="estimator.js" defer></script>
+</body>
+</html>
