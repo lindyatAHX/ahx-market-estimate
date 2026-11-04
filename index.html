@@ -11,7 +11,11 @@
     html, body { margin: 0; background: #000; }
     body { padding: 16px; }
     @media (max-width: 520px) { body { padding: 12px 0; } }
+    /* Inside the Webflow iframe the frame is sized to the content, so it never scrolls on its own;
+       that way the mouse wheel over the estimator scrolls the page instead of getting stuck. */
+    html.is-embedded { overflow: hidden; }
   </style>
+  <script>if (window.parent !== window) document.documentElement.className += ' is-embedded';</script>
 </head>
 <body>
   <div id="ahx-estimator"></div>
