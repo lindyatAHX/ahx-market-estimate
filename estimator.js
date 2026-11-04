@@ -47,9 +47,16 @@
 
   // Keep the parent iframe sized to the content (the Webflow embed snippet listens for this).
   if (embedded && window.ResizeObserver) {
+    // Measure the body, not documentElement.scrollHeight: scrollHeight is never less than the iframe's
+    // current height, so the frame could grow but never shrink back.
+    var lastH = 0;
     new ResizeObserver(function () {
-      window.parent.postMessage({ type: 'ahx-estimator-height', height: document.documentElement.scrollHeight }, '*');
-    }).observe(document.documentElement);
+      var h = Math.ceil(document.body.getBoundingClientRect().height);
+      if (h && h !== lastH) {
+        lastH = h;
+        window.parent.postMessage({ type: 'ahx-estimator-height', height: h }, '*');
+      }
+    }).observe(document.body);
   }
 
   // ---------- helpers ----------
