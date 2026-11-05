@@ -92,7 +92,67 @@
     return v;
   }
 
-  // ---------- location lookup (ZIP, "City, ST", or a street address ending in a ZIP) ----------
+  // ---------- location lookup (ZIP, "City, ST", "City, State", "City ST", or an address ending in a ZIP) ----------
+  var STATES = {
+    AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado',
+    CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia',
+    HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky',
+    LA: 'Louisiana', ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota',
+    MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire',
+    NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota',
+    OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island',
+    SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+    VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming'
+  };
+  // Every way a state can be written at the end of the input, longest first so
+  // "West Virginia" wins over "Virginia". Includes "Washington DC" / "D.C.".
+  var STATE_NAMES = (function () {
+    var list = [];
+    Object.keys(STATES).forEach(function (ab) {
+      list.push({ text: STATES[ab].toLowerCase(), ab: ab });
+      list.push({ text: ab.toLowerCase(), ab: ab });
+    });
+    list.push({ text: 'd.c.', ab: 'DC' }, { text: 'washington dc', ab: 'DC' }, { text: 'washington d.c.', ab: 'DC' });
+    return list.sort(function (a, b) { return b.text.length - a.text.length; });
+  })();
+
+  // "Rochester, Michigan" / "rochester mi" / "Rochester, MI, USA" -> { city: 'Rochester', st: 'MI' }
+  function parseCityState(text) {
+    var t = text.toLowerCase().replace(/\s+/g, ' ')
+      .replace(/[,\s]*(usa|u\.s\.a\.?|us|u\.s\.?|united states( of america)?)\.?$/, '')
+      .replace(/[\s,.]+$/, '');
+    for (var i = 0; i < STATE_NAMES.length; i++) {
+      var s = STATE_NAMES[i].text;
+      if (t.length <= s.length || t.slice(-s.length) !== s) continue;
+      var before = t.charAt(t.length - s.length - 1);
+      if (before !== ' ' && before !== ',') continue;   // whole word only
+      var city = t.slice(0, t.length - s.length).replace(/[\s,]+$/, '').trim();
+      if (STATE_NAMES[i].ab === 'DC' && (!city || city === 'washington')) city = 'washington';
+      if (!city) continue;
+      return { city: city, st: STATE_NAMES[i].ab };
+    }
+    return null;
+  }
+  // Spelling variants the ZIP database may use: St./Saint, Ft./Fort, Mt./Mount.
+  function cityVariants(city) {
+    var out = [city], swaps = [[/^st\.? /, 'saint '], [/^saint /, 'st. '], [/^ft\.? /, 'fort '], [/^mt\.? /, 'mount ']];
+    swaps.forEach(function (sw) { if (sw[0].test(city)) out.push(city.replace(sw[0], sw[1])); });
+    return out;
+  }
+  function lookupCity(variants, st) {
+    var city = variants[0];
+    return lookupJSON('https://api.zippopotam.us/us/' + st.toLowerCase() + '/' + encodeURIComponent(city))
+      .then(function (d) {
+        if (!d || !d.places || !d.places.length) return variants.length > 1 ? lookupCity(variants.slice(1), st) : null;
+        var exact = d.places.filter(function (pl) { return pl['place name'].toLowerCase() === city; });
+        var pool = exact.length ? exact : d.places;
+        // Skip placeholder ZIPs like 10000 (New York) when a real one is listed.
+        var pl = pool.filter(function (x) { return !/000$/.test(x['post code']); })[0] || pool[0];
+        return { zip: pl['post code'], city: pl['place name'], state: st,
+          lat: num(pl.latitude), lon: num(pl.longitude) };
+      });
+  }
+
   var locCache = {};
   function lookupJSON(url) {
     return fetch(url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
@@ -112,17 +172,9 @@
           lat: num(pl.latitude), lon: num(pl.longitude) };
       });
     } else {
-      var cs = text.match(/^(.+?),\s*([A-Za-z]{2})$/);
+      var cs = parseCityState(text);
       if (!cs) return Promise.resolve(null);
-      var city = cs[1].trim(), st = cs[2].toUpperCase();
-      p = lookupJSON('https://api.zippopotam.us/us/' + st.toLowerCase() + '/' + encodeURIComponent(city.toLowerCase()))
-        .then(function (d) {
-          if (!d || !d.places || !d.places.length) return null;
-          var exact = d.places.filter(function (pl) { return pl['place name'].toLowerCase() === city.toLowerCase(); });
-          var pl = (exact.length ? exact : d.places)[0];
-          return { zip: pl['post code'], city: pl['place name'], state: st,
-            lat: num(pl.latitude), lon: num(pl.longitude) };
-        });
+      p = lookupCity(cityVariants(cs.city), cs.st);
     }
     return p.then(function (loc) { if (loc) locCache[text] = loc; return loc; });
   }
@@ -249,13 +301,13 @@
         '<h2 class="ahxe-h">New estimate</h2>' +
         '<div class="ahxe-route">' +
           '<div class="ahxe-field"><label class="ahxe-label" for="ahxe-from">Pickup location</label>' +
-            '<div class="ahxe-inbox"><input class="ahxe-input" id="ahxe-from" name="from" autocomplete="off" placeholder="ZIP or City, ST">' +
+            '<div class="ahxe-inbox"><input class="ahxe-input" id="ahxe-from" name="from" autocomplete="off" placeholder="ZIP or City, State">' +
             '<button type="button" class="ahxe-clear" data-clear="from" aria-label="Clear pickup">×</button></div>' +
             '<div class="ahxe-resolved" data-resolved="from"></div></div>' +
           '<button type="button" class="ahxe-swap" data-swap aria-label="Swap pickup and delivery">' +
             '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg></button>' +
           '<div class="ahxe-field"><label class="ahxe-label" for="ahxe-to">Delivery location</label>' +
-            '<div class="ahxe-inbox"><input class="ahxe-input" id="ahxe-to" name="to" autocomplete="off" placeholder="ZIP or City, ST">' +
+            '<div class="ahxe-inbox"><input class="ahxe-input" id="ahxe-to" name="to" autocomplete="off" placeholder="ZIP or City, State">' +
             '<button type="button" class="ahxe-clear" data-clear="to" aria-label="Clear delivery">×</button></div>' +
             '<div class="ahxe-resolved" data-resolved="to"></div></div>' +
         '</div>' +
@@ -293,7 +345,9 @@
     var text = form.elements[which].value;
     if (!text.trim()) { setResolved(which, null, ''); return Promise.resolve(null); }
     return resolveLocation(text).then(function (loc) {
-      setResolved(which, loc, loc ? '' : 'Couldn’t find that location. Try a 5-digit ZIP.');
+      setResolved(which, loc, loc ? '' : (/[a-z]/i.test(text) && !parseCityState(text)
+        ? 'Add the state, like Rochester, MI, or use a 5-digit ZIP.'
+        : 'Couldn’t find that location. Try a 5-digit ZIP.'));
       return loc;
     });
   }
