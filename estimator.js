@@ -636,4 +636,6 @@
   if (urlParams.get('to')) form.elements.to.value = urlParams.get('to');
   // Lane pages pass run=0 so the form is pre-filled without pricing on every page view (or every crawl).
   if (urlParams.get('from') && urlParams.get('to') && urlParams.get('run') !== '0') form.requestSubmit();
+  // Otherwise show where each pre-filled field resolved to (e.g. an auction page fills only the pickup).
+  else ['from', 'to'].forEach(function (w) { if (urlParams.get(w)) checkField(w); });
 })();
